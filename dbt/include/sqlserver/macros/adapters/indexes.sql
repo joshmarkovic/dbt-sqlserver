@@ -14,6 +14,14 @@
     ON {{full_relation}}
 {% endmacro %}
 
+{#
+    Legacy standalone index macros, called by users from pre- and post-hooks
+    (e.g. `post-hook: "{{ create_clustered_index(columns=['id']) }}"`).
+    The `indexes` model config supersedes them, but reconciliation never
+    drops the `clustered_`/`nonclustered_` names they create (see
+    LEGACY_INDEX_PREFIXES in relation_configs/index.py), so existing hook
+    usage keeps working alongside it.
+#}
 {% macro drop_xml_indexes() -%}
     {{ log("Running drop_xml_indexes() macro...") }}
 
@@ -201,42 +209,6 @@
         {%- endcall %}
       {% endfor %}
 {% endmacro %}
-
-{% macro sqlserver__list_nonclustered_rowstore_indexes(relation) -%}
-  {% call statement('list_nonclustered_rowstore_indexes', fetch_result=True) -%}
-
-    SELECT i.name AS index_name
-    , i.name + '__dbt_backup' as index_new_name
-    , COL_NAME(ic.object_id,ic.column_id) AS column_name
-    FROM sys.indexes AS i
-    INNER JOIN sys.index_columns AS ic
-        ON i.object_id = ic.object_id AND i.index_id = ic.index_id and i.type <> 5
-    WHERE i.object_id = OBJECT_ID('{{ relation.schema }}.{{ relation.identifier }}')
-
-    UNION ALL
-
-    SELECT  obj.name AS index_name
-    , obj.name + '__dbt_backup' as index_new_name
-    , col1.name AS column_name
-    FROM sys.foreign_key_columns fkc
-    INNER JOIN sys.objects obj
-        ON obj.object_id = fkc.constraint_object_id
-    INNER JOIN sys.tables tab1
-        ON tab1.object_id = fkc.parent_object_id
-    INNER JOIN sys.schemas sch
-        ON tab1.schema_id = sch.schema_id
-    INNER JOIN sys.columns col1
-        ON col1.column_id = parent_column_id AND col1.object_id = tab1.object_id
-    INNER JOIN sys.tables tab2
-        ON tab2.object_id = fkc.referenced_object_id
-    INNER JOIN sys.columns col2
-        ON col2.column_id = referenced_column_id AND col2.object_id = tab2.object_id
-    WHERE sch.name = '{{ relation.schema }}' and tab1.name = '{{ relation.identifier }}'
-
-  {% endcall %}
-  {{ return(load_result('list_nonclustered_rowstore_indexes').table) }}
-{% endmacro %}
-
 
 {% macro sqlserver__server_major_version() -%}
   {#- Detected engine major version: 13 = 2016, 14 = 2017, 15 = 2019,
