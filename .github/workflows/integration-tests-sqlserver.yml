@@ -120,15 +120,15 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install uv
-        run: pip install uv
+        run: pip install uv==0.11.21
 
       - name: Install dependencies
         env:
           INSTALL_EXTRA: ${{ matrix.backend == 'pyodbc' && 'pyodbc' || 'mssql' }}
-        run: uv pip install --system -e ".[$INSTALL_EXTRA]" --group dev
+        run: uv sync --locked --extra "$INSTALL_EXTRA" --group dev
 
       - name: Run functional tests
-        run: pytest -ra -v tests/functional --profile "ci_sql_server"
+        run: uv run --no-sync pytest -ra -v tests/functional --profile "ci_sql_server"
         env:
           DBT_TEST_USER_1: DBT_TEST_USER_1
           DBT_TEST_USER_2: DBT_TEST_USER_2
